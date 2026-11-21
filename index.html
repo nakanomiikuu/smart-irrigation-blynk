@@ -42,6 +42,10 @@ h2{font-size:14px;font-weight:600;margin:0 0 10px;text-align:center}h3{font-size
 .row{padding:10px 0;border-top:1px solid var(--line)}.row:first-of-type{border-top:0}
 .rh{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px}.rh output{font-weight:600;background:#f1ebdf;border-radius:10px;padding:1px 9px;font-size:12px;white-space:nowrap}
 input[type=range]{width:100%;margin:8px 0 0;height:28px;accent-color:var(--g);background:none}
+.ctl{display:flex;align-items:center;gap:8px;margin-top:8px}
+.ctl input[type=range]{flex:1;min-width:0;width:auto;margin:0}
+.ctl input[type=number]{width:74px;flex:none;font:inherit;text-align:center;border:1px solid var(--line);background:#faf7f1;border-radius:12px;padding:6px 4px}
+.ctl .u{font-size:11px;color:var(--mut);min-width:34px}
 .sw{position:relative;width:46px;height:26px;border-radius:14px;border:0;background:#d8cfc0;cursor:pointer;flex:none;transition:.12s}
 .sw:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.12s}
 .sw.on{background:var(--g)}.sw.on:after{left:23px}
@@ -166,10 +170,10 @@ const POLL_MS = 700;                 // interval tarik data alat → app (makin 
 const MODES = ['Auto','Manual','Jadwal']; // V8: 0 = Auto, 1 = Manual, 2 = Jadwal (sesuai firmware)
 const DBL = new Set([0,1,20,21,22,23,25,26]);       // Double 1 desimal
 const STR = new Set([6,7,9,11,15,18]);              // String
-const DEF = {4:0,5:0,8:0,9:'08:00',10:5,11:'17:00',12:5,13:1,14:1,16:120,17:20,19:15,20:5,21:20,22:0,23:0,24:20,25:20,26:40,27:60,28:60,29:1,30:1,31:1};
+const DEF = {4:0,5:0,8:0,9:'08:00',10:5,11:'17:00',12:5,13:1,14:1,16:120,17:20,20:5,21:20,22:0,23:0,24:20,25:20,26:40,27:60,28:60,29:1,30:1,31:1};
 /* pin, label, unit, min, max, step */
 const LISTS = {
- pump:[[16,'Maks. lama nyala, Auto','detik',0,21600,10],[17,'Jeda setelah pompa mati, Auto','menit',0,1440,1],[19,'Maks. lama nyala, Manual','menit',0,240,1]],
+ pump:[[16,'Maks. lama nyala, Auto','detik',0,21600,10],[17,'Jeda setelah pompa mati, Auto','menit',0,1440,1],[19,'Maks. lama nyala, Manual','detik',1,240,1]],
  tank:[[20,'Jarak sensor saat tangki PENUH','cm',2,400,.1],[21,'Jarak sensor saat tangki HABIS','cm',2,400,.1]],
  dht:[[22,'Offset suhu DHT22','°C',-20,20,.1],[23,'Offset kelembapan DHT22','%RH',-30,30,.1]],
  thr:[[24,'Ambang tanah kering','%',1,95,1],[25,'Batas suhu rendah','°C',0,60,.1],[26,'Batas suhu tinggi','°C',0,60,.1],[27,'Tunda WiFi terputus','detik',5,3600,1],[28,'Jeda ulang pengingat','menit',0,1440,1]]
@@ -190,6 +194,12 @@ try{const q=new URLSearchParams(location.search),sv=JSON.parse(localStorage.getI
  cfg.token=q.get('token')||sv.token||'';cfg.server=q.get('server')||sv.server||'blynk.cloud';}catch(e){}
 const demo=()=>!cfg.token;
 const fm=(p,v)=>DBL.has(p)?(+v).toFixed(1):Math.round(v);
+/* V17, V19, V28 dalam menit: tampilkan sebagai jam bila > 59 menit */
+const MINP=new Set([17,28]);
+/* V16 dalam detik: tampilkan sebagai menit bila > 59 detik, dan jam bila >= 60 menit */
+const fmtSec=v=>{v=Math.round(v);if(v<60)return v+' detik';if(v<3600){const m=Math.floor(v/60),d=v%60;return m+' menit'+(d?' '+d+' detik':'');}
+ const h=Math.floor(v/3600),m=Math.floor(v%3600/60);return h+' jam'+(m?' '+m+' menit':'');};
+const fmtMin=v=>{v=Math.round(v);if(v<60)return v+' menit';const h=Math.floor(v/60),m=v%60;return h+' jam'+(m?' '+m+' menit':'');};
 
 /* ===== KOMUNIKASI BLYNK (HTTPS API) ===== */
 const base=()=>`https://${cfg.server}/external/api`;
@@ -236,7 +246,7 @@ function sim(){const t=Date.now()/1000;
  S[3]=Math.max(0,Math.min(100,S[3]-(S[5]?.6:0)+(S[5]?0:.05)));
  if(!S._i){S._i=1;S[2]=45;S[3]=80;}
  S[4]=S[3]<=3?255:0;S[6]=S[2]<=S[24]?'Kering':S[2]>70?'Basah':'Lembap';
- S[7]=S[4]?'Air habis, isi tangki':'Air cukup';S[15]=new Date().toTimeString().slice(0,5);S[18]=S[5]?'Pompa menyala':'Siap';}
+ S[7]=S[4]?'Air habis, isi tangki':'Air cukup';S[15]=new Date().toTimeString().slice(0,5);S[18]=S[5]?'Pompa menyala':'Siap';if(S[19]==null)S[19]=30;}
 
 /* ===== EVENT TURUNAN DARI DATA ===== */
 const evState=()=>({air_habis:S[4]>0,tanah_kering:S[2]<=S[24],suhu_tidak_wajar:S[0]<S[25]||S[0]>S[26],wifi_terputus:!online});
@@ -248,18 +258,22 @@ function events(){const e=evState();
 /* ===== RENDER ===== */
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2200);}
 function sliderRow(d){const [p,l,u,mn,mx,st]=d;
- return `<div class="row"><div class="rh"><span>${l}</span><output data-o="${p}"></output></div><input type="range" data-p="${p}" min="${mn}" max="${mx}" step="${st}"></div>`;}
+ return `<div class="row"><div class="rh"><span>${l}</span><output data-o="${p}"></output></div><div class="ctl"><input type="range" data-p="${p}" min="${mn}" max="${mx}" step="${st}"><input type="number" data-n="${p}" min="${mn}" max="${mx}" step="${DBL.has(p)?0.1:1}" inputmode="${DBL.has(p)?'decimal':'numeric'}" aria-label="Ketik nilai ${l}"><span class="u">${u}</span></div></div>`;}
 function buildUI(){
  for(const k in LISTS)$(`[data-list="${k}"]`).innerHTML=LISTS[k].map(sliderRow).join('');
  for(const s of SCHED)$(s.sel).innerHTML=`<div class="rh"><h3 style="margin:0">${s.n}</h3><button class="sw" data-sw="${s.on}" aria-label="Aktifkan ${s.n}"></button></div>
   <label>Jam mulai</label><input type="time" data-time="${s.t}">
-  <div class="row" style="border:0;padding-bottom:0"><div class="rh"><span>Durasi siram</span><output data-o="${s.d}"></output></div><input type="range" data-p="${s.d}" min="1" max="240" step="1"></div>`;
+  <div class="row" style="border:0;padding-bottom:0"><div class="rh"><span>Durasi siram</span><output data-o="${s.d}"></output></div><div class="ctl"><input type="range" data-p="${s.d}" min="5" max="240" step="5"><input type="number" data-n="${s.d}" min="5" max="240" step="1" inputmode="numeric" aria-label="Ketik durasi ${s.n}"><span class="u">detik</span></div></div>`;
  $$('[data-seg]').forEach(g=>g.innerHTML=MODES.map((m,i)=>`<button data-mode="${i}">${m}</button>`).join(''));
  $('#evList').innerHTML=EVENTS.map(E=>`<div class="row ev"><div>${E.n}<small>${E.d}</small></div><span class="st" data-ev="${E.k}">Aman</span>${E.sw?`<button class="sw" data-sw="${E.sw}" aria-label="${E.n}"></button>`:''}</div>`).join('');
  $$('input[type=range]').forEach(r=>{const p=+r.dataset.p;
   r.addEventListener('pointerdown',()=>drag=p);
   r.addEventListener('input',()=>{const v=+r.value;if(set(p,v))drag=p;});
   r.addEventListener('change',()=>{drag=0;paint(true);});});
+ $$('[data-n]').forEach(i=>{const p=+i.dataset.n,mn=+i.min,mx=+i.max;
+  const apply=()=>{let v=parseFloat(i.value.replace(',','.'));if(isNaN(v)){paint(true);return;}
+   v=Math.min(mx,Math.max(mn,v));v=DBL.has(p)?Math.round(v*10)/10:Math.round(v);set(p,v);paint(true);};
+  i.addEventListener('change',apply);i.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();i.blur();}});});
  $$('[data-time]').forEach(i=>i.addEventListener('change',()=>{if(i.value)set(+i.dataset.time,i.value);}));
  $$('[data-sw]').forEach(b=>b.addEventListener('click',()=>set(+b.dataset.sw,S[b.dataset.sw]?0:1)));
  $$('[data-mode]').forEach(b=>b.addEventListener('click',()=>set(8,+b.dataset.mode)));
@@ -282,9 +296,10 @@ function paint(force){
  $$('[data-mode]').forEach(b=>b.classList.toggle('on',+b.dataset.mode==S[8]));
  $$('[data-sw]').forEach(b=>b.classList.toggle('on',!!S[b.dataset.sw]));
  $$('[data-time]').forEach(i=>{if(document.activeElement!==i)i.value=S[i.dataset.time];});
- $$('input[type=range]').forEach(r=>{const p=+r.dataset.p;if(drag!==p||force)r.value=S[p];
-  const o=$(`[data-o="${p}"]`),u=[...Object.values(LISTS).flat(),...SCHED.map(s=>[s.d,'','menit'])].find(d=>d[0]==p)[2];
-  if(o)o.textContent=fm(p,S[p])+' '+u;});
+ $$('input[type=range]').forEach(r=>{const p=+r.dataset.p;if(drag!==p||force)r.value=S[p]==null?r.min:S[p];
+  const o=$(`[data-o="${p}"]`),u=[...Object.values(LISTS).flat(),...SCHED.map(s=>[s.d,'','detik'])].find(d=>d[0]==p)[2];
+  const ni=$(`[data-n="${p}"]`);if(ni&&document.activeElement!==ni)ni.value=S[p]==null?'':fm(p,S[p]);
+  if(o)o.textContent=S[p]==null?'belum diatur':(p==16||p==19)?fmtSec(S[p]):MINP.has(p)?fmtMin(S[p]):fm(p,S[p])+' '+u;});
  const e=evState(),act=EVENTS.filter(E=>e[E.k]&&(!E.sw||S[E.sw]));
  $$('[data-ev]').forEach(s=>{const on=e[s.dataset.ev];s.textContent=on?'Aktif':'Aman';s.classList.toggle('bad',on);});
  const a=$('#alertBar');a.classList.toggle('on',act.length>0);a.textContent=act.length?'⚠ '+act.map(E=>E.n).join(' · '):'';
